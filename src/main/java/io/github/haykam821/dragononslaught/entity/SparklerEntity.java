@@ -4,30 +4,31 @@ import eu.pb4.polymer.core.api.entity.PolymerEntity;
 import io.github.haykam821.dragononslaught.game.spawner.target.DragonTarget;
 import io.github.haykam821.dragononslaught.game.spawner.target.SparklerDragonTarget;
 import io.github.haykam821.dragononslaught.item.DragonOnslaughtItems;
+import net.fabricmc.fabric.api.networking.v1.context.PacketContext;
 import net.minecraft.SharedConstants;
-import net.minecraft.component.DataComponentTypes;
-import net.minecraft.component.type.FireworksComponent;
-import net.minecraft.entity.EntityStatuses;
-import net.minecraft.entity.EntityType;
-import net.minecraft.entity.ItemEntity;
-import net.minecraft.entity.projectile.FireworkRocketEntity;
-import net.minecraft.item.ItemStack;
-import net.minecraft.item.Items;
-import net.minecraft.server.world.ServerWorld;
-import net.minecraft.sound.SoundEvents;
-import net.minecraft.util.math.Vec3d;
-import net.minecraft.world.World;
-import xyz.nucleoid.packettweaker.PacketContext;
+import net.minecraft.core.component.DataComponents;
+import net.minecraft.world.entity.EntityTypes;
+import net.minecraft.world.item.component.Fireworks;
+import net.minecraft.world.entity.EntityEvent;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.item.ItemEntity;
+import net.minecraft.world.entity.projectile.FireworkRocketEntity;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.level.Level;
 
 public class SparklerEntity extends ItemEntity implements PolymerEntity {
 	private static final int DURATION = SharedConstants.TICKS_PER_SECOND * 5;
 	private static final int EFFECT_INTERVAL = SharedConstants.TICKS_PER_SECOND / 2;
 
-	public SparklerEntity(EntityType<? extends ItemEntity> type, World world) {
+	public SparklerEntity(EntityType<? extends ItemEntity> type, Level world) {
 		super(type, world);
 
-		this.setStack(new ItemStack(DragonOnslaughtItems.SPARKLER));
-		this.setPickupDelayInfinite();
+		this.setItem(new ItemStack(DragonOnslaughtItems.SPARKLER));
+		this.setNeverPickUp();
 	}
 
 	public DragonTarget getDragonTarget() {
@@ -38,15 +39,15 @@ public class SparklerEntity extends ItemEntity implements PolymerEntity {
 	public void tick() {
 		super.tick();
 
-		if (this.getWorld() instanceof ServerWorld world) {
-			if (this.age % EFFECT_INTERVAL == 0) {
-				FireworksComponent fireworks = this.getStack().get(DataComponentTypes.FIREWORKS);
-				spawnFireworks(world, this.getPos(), fireworks);
+		if (this.level() instanceof ServerLevel world) {
+			if (this.tickCount % EFFECT_INTERVAL == 0) {
+				Fireworks fireworks = this.getItem().get(DataComponents.FIREWORKS);
+				spawnFireworks(world, this.position(), fireworks);
 
-				this.playSound(SoundEvents.ENTITY_FIREWORK_ROCKET_LAUNCH, 3, 1);
+				this.playSound(SoundEvents.FIREWORK_ROCKET_LAUNCH, 3, 1);
 			}
 
-			if (this.age > DURATION) {
+			if (this.tickCount > DURATION) {
 				this.discard();
 			}
 		}
@@ -54,18 +55,18 @@ public class SparklerEntity extends ItemEntity implements PolymerEntity {
 
 	@Override
 	public EntityType<?> getPolymerEntityType(PacketContext context) {
-		return EntityType.ITEM;
+		return EntityTypes.ITEM;
 	}
 
-	private static void spawnFireworks(ServerWorld world, Vec3d pos, FireworksComponent fireworks) {
+	private static void spawnFireworks(ServerLevel level, Vec3 pos, Fireworks fireworks) {
 		ItemStack stack = new ItemStack(Items.FIREWORK_ROCKET);
-		stack.set(DataComponentTypes.FIREWORKS, fireworks);
+		stack.set(DataComponents.FIREWORKS, fireworks);
 
-		FireworkRocketEntity rocket = new FireworkRocketEntity(world, pos.getX(), pos.getY(), pos.getZ(), stack);
+		FireworkRocketEntity rocket = new FireworkRocketEntity(level, pos.x(), pos.y(), pos.z(), stack);
 
 		// Immediately explode the firework rocket on the client
-		world.spawnEntity(rocket);
-		world.sendEntityStatus(rocket, EntityStatuses.EXPLODE_FIREWORK_CLIENT);
+		level.addFreshEntity(rocket);
+		level.broadcastEntityEvent(rocket, EntityEvent.FIREWORKS_EXPLODE);
 
 		rocket.discard();
 	}
